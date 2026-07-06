@@ -1,57 +1,69 @@
-# Gemini MultiMerge v2
+# MultiMerge (Custom Mail Merge for Inkscape)
 
-Script Python untuk menggabungkan data CSV ke template SVG, mengkonversi ke PDF (via Inkscape), lalu menggabungkan semua PDF menjadi satu file PDF multipage (via Ghostscript).
+Script Python untuk merge data CSV ke template SVG, konversi ke PDF via Inkscape, lalu gabungkan semua PDF menjadi satu file multipage via Ghostscript.
+
+Cocok untuk cetak kupon, voucher, kartu nama, atau dokumen lain yang isinya sama tapi datanya berbeda per baris.
 
 ## Arsitektur
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  FASE 1     │ --> │  FASE 2     │ --> │  FASE 3     │ --> │  FASE 4     │
-│  Merge CSV  │     │  Convert    │     │  Combine    │     │  Cleanup    │
-│  -> SVG     │     │  SVG -> PDF │     │  PDF -> PDF  │     │  Hapus      │
-│             │     │             │     │  multipage   │     │  file temp  │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-  Paralel              Paralel              Ghostscript        Hapus file
-  (semua CPU)          (50% CPU)            sequential          & workdir
+CSV + Template SVG
+       │
+       ▼
+┌──────────────┐
+│  FASE 1      │  Merge: baca CSV, generate file SVG per baris
+│  (Paralel)   │  Semua CPU dipakai
+└──────┬───────┘
+       │  output_00000.svg, output_00001.svg, ...
+       ▼
+┌──────────────┐
+│  FASE 2      │  Convert: SVG → PDF via Inkscape
+│  (Paralel)   │  50% CPU, retry otomatis jika gagal
+└──────┬───────┘
+       │  output_00000.pdf, output_00001.pdf, ...
+       ▼
+┌──────────────┐
+│  FASE 3      │  Combine: gabung semua PDF via Ghostscript
+│  (Sequential)│
+└──────┬───────┘
+       │  output.pdf (multipage)
+       ▼
+┌──────────────┐
+│  FASE 4      │  Cleanup: hapus file sementara
+└──────────────┘
 ```
 
 ## Dependencies
 
-| Tool | Fungsi | Install (Debian/Ubuntu) |
-|------|--------|------------------------|
+| Tool | Fungsi | Install |
+|------|--------|---------|
 | Python 3.7+ | Runtime | `sudo apt install python3` |
-| Inkscape | Konversi SVG -> PDF | `sudo apt install inkscape` |
+| Inkscape | Konversi SVG → PDF | `sudo apt install inkscape` |
 | Ghostscript | Gabungkan PDF | `sudo apt install ghostscript` |
 
 ## File Structure
 
 ```
-gemini-multimerge-v2/
-├── gemini-multimerge-v2.py   # Script utama
-├── template.svg              # Template SVG dengan placeholder %VAR_xxx%
-├── data.csv                  # File data CSV
-└── README.md                 # Dokumentasi ini
+project/
+├── multimerge.py        # Script utama
+├── template.svg         # Template SVG dengan placeholder %VAR_xxx%
+├── data.csv             # File data CSV
+├── README.md            # Dokumentasi ini
+└── .gitignore
 ```
 
-## Format CSV
+## Panduan Cara Pakai
 
-File CSV harus memiliki header yang sesuai dengan placeholder di template SVG.
+### 1. Siapkan Template SVG
 
-**Contoh CSV:**
-```csv
-a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,c1,c2
-03001,03101,03201,...,Afina Rizkaningsih,Eni Purwanti,...,Juli 2026,Agustus 2026
-```
+Buat file SVG di Inkscape. Untuk setiap field yang akan diisi dari CSV, tambahkan placeholder dengan format `%VAR_NAMA_KOLOM%`.
 
-**Mapping ke template:**
-- Header `a1` -> placeholder `%VAR_a1%` di template SVG
-- Header `c1` -> placeholder `%VAR_c1%` di template SVG
-- dst.
+**Contoh di Inkscape:**
+- Buat text object
+- Isi dengan: `%VAR_nama%`
+- Atau: `%VAR_alamat%`, `%VAR_no_hp%`, dll
 
-## Template SVG
-
-Template SVG harus menggunakan format placeholder `%VAR_NAMA_KOLOM%`:
-
+**Contoh isi template.svg (bagian text):**
 ```xml
 <text id="text1">
   <tspan>%VAR_a1%</tspan>
@@ -61,40 +73,55 @@ Template SVG harus menggunakan format placeholder `%VAR_NAMA_KOLOM%`:
 </text>
 ```
 
-## Penggunaan
+### 2. Siapkan File CSV
 
-### Dasar (menggunakan default)
+Buat file CSV dengan header yang sesuai dengan placeholder di template.
 
-```bash
-python gemini-multimerge-v2.py
+**Contoh data.csv:**
+```csv
+nama,alamat,no_hp,kota
+Budi Santoso,Jl. Merdeka No. 1,081234567890,Jakarta
+Siti Rahayu,Jl. Sudirman No. 2,085678901234,Bandung
+Andi Wijaya,Jl. Gatot Subroto No. 3,089012345678,Surabaya
 ```
 
-### Custom path
+**Aturan CSV:**
+- Baris pertama = header (nama kolom)
+- Header harus sama dengan placeholder di template (tanpa `%VAR_` dan `%`)
+- Gunakan koma (`,`) sebagai pemisah
+- Jika ada koma di dalam data, bungkus dengan tanda kutip: `"Jakarta, Indonesia"`
 
+### 3. Jalankan Script
+
+**Dasar (otomatis):**
 ```bash
-python gemini-multimerge-v2.py \
-  --template template.svg \
-  --data data.csv \
-  --output hasil.pdf
+python3 multimerge.py
+```
+Ini akan mencari `template.svg` dan `data.csv` di folder yang sama, hasilnya `output.pdf`.
+
+**Custom:**
+```bash
+python3 multimerge.py \
+  --template voucher.svg \
+  --data data_siswa.csv \
+  --output voucher_final.pdf
 ```
 
-### Custom Inkscape/Ghostscript path
-
+**Custom tools:**
 ```bash
-python gemini-multimerge-v2.py \
+python3 multimerge.py \
   --inkscape /usr/bin/inkscape \
   --ghostscript /usr/bin/gs
 ```
 
-### Custom timeout dan workers
-
+**Custom performance:**
 ```bash
-python gemini-multimerge-v2.py \
+python3 multimerge.py \
   --timeout 180 \
   --convert-workers 4
 ```
 
-## Command Line Arguments
+### 4. Command Line Arguments
 
 | Argument | Default | Deskripsi |
 |----------|---------|-----------|
@@ -103,51 +130,77 @@ python gemini-multimerge-v2.py \
 | `--output` | `output.pdf` | File output PDF |
 | `--inkscape` | `inkscape` | Path ke Inkscape |
 | `--ghostscript` | `gs` | Path ke Ghostscript |
-| `--timeout` | `120` | Timeout per konversi (detik) |
-| `--convert-workers` | `setengah CPU` | Jumlah worker fase konversi |
+| `--timeout` | `120` | Timeout per konversi SVG (detik) |
+| `--convert-workers` | `50% CPU` | Jumlah worker fase konversi |
 
-## Perubahan dari v1
+### 5. Contoh Penggunaan Nyata
 
-| Fitur | v1 | v2 |
-|-------|----|----|
-| CLI arguments | Hardcoded | `argparse` dengan `--flags` |
-| Working directory | Direct di cwd | Unik per eksekusi (timestamp + PID) |
-| Timeout | Tidak ada | 120 detik per file SVG |
-| Cleanup on error | Tidak ada | Selalu cleanup via try/finally |
-| Natural sort | `split("_")` | Regex `(\d+)` |
-| ProcessPoolExecutor | Dibuat ulang tiap loop | Reuse dalam scope |
-| Output progress | Terbatas | Detail per putaran (success/fail count) |
-| Error reporting | `print` ke stderr | Return tuple `(success, error_msg)` |
+**Membuat 100 voucher makan:**
+```bash
+# 1. Buat template voucher di Inkscape
+#    Tambahkan placeholder: %VAR_nama%, %VAR_nominal%, %VAR_kode%
+
+# 2. Buat data.csv
+#    nama,nominal,kode
+#    Budi Santoso,50000,VOU-001
+#    Siti Rahayu,75000,VOU-002
+#    ...
+
+# 3. Jalankan
+python3 multimerge.py --template voucher.svg --data data.csv --output voucher_final.pdf
+```
+
+**Membuat kartu nama 50 orang:**
+```bash
+python3 multimerge.py \
+  --template kartu-nama.svg \
+  --data daftar-karyawan.csv \
+  --output kartu-nama-semua.pdf
+```
 
 ## Troubleshooting
 
 ### "Inkscape tidak ditemukan"
 ```bash
-# Install Inkscape
+# Install
 sudo apt install inkscape
 
-# Atau specify path manual
-python gemini-multimerge-v2.py --inkscape /usr/bin/inkscape
+# Atau specify path
+python3 multimerge.py --inkscape /usr/bin/inkscape
 ```
 
 ### "Ghostscript tidak ditemukan"
 ```bash
-# Install Ghostscript
+# Install
 sudo apt install ghostscript
 
-# Atau specify path manual
-python gemini-multimerge-v2.py --ghostscript /usr/bin/gs
+# Atau specify path
+python3 multimerge.py --ghostscript /usr/bin/gs
 ```
 
 ### "File SVG gagal dikonversi"
-1. Cek apakah template SVG valid (bisa dibuka di Inkscape)
+1. Buka template SVG di Inkscape, pastikan valid
 2. Coba tingkatkan timeout: `--timeout 180`
-3. File SVG yang gagal akan tetap disimpan untuk debugging
+3. File SVG yang gagal tetap disimpan untuk debugging
 
 ### "Jumlah SVG != jumlah baris CSV"
-1. Cek format CSV (pastikan tidak ada baris kosong)
-2. Cek apakah ada karakter aneh di CSV
+1. Cek format CSV (tidak ada baris kosong)
+2. Cek delimiter (harus koma)
 3. Cek log error di stderr
+
+### Error "Gio::DBus::Error"
+Error ini muncul sesekali saat Inkscape dijalankan headless. **Tidak berpengaruh pada hasil** — script otomatis retry file yang gagal.
+
+## Perubahan dari v1
+
+| Fitur | v1 | v2 |
+|-------|----|----|
+| Nama | Gemini MultiMerge | MultiMerge |
+| CLI args | Hardcoded | `argparse` dengan `--flags` |
+| Working dir | Direct di cwd | Unik per eksekusi |
+| Timeout | Tidak ada | 120 detik/file |
+| Cleanup on error | Tidak ada | Selalu cleanup |
+| Natural sort | `split("_")` | Regex |
 
 ## License
 

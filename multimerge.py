@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Gemini MultiMerge v2 — Script untuk menggabungkan data CSV ke template SVG,
+MultiMerge (Custom Mail Merge for Inkscape) — Script untuk menggabungkan data CSV ke template SVG,
 mengkonversi ke PDF (via Inkscape), lalu menggabungkan semua PDF
 menjadi satu file PDF multipage (via Ghostscript).
 
@@ -16,9 +16,9 @@ Dependencies:
   - Ghostscript (gs) — untuk menggabungkan PDF
 
 Usage:
-  python gemini-multimerge-v2.py [--template FILE] [--data FILE] [--output FILE]
-                                 [--inkscape PATH] [--ghostscript PATH]
-                                 [--timeout SECONDS] [--convert-workers N]
+  python multimerge.py [--template FILE] [--data FILE] [--output FILE]
+                       [--inkscape PATH] [--ghostscript PATH]
+                       [--timeout SECONDS] [--convert-workers N]
 """
 
 import argparse
@@ -80,7 +80,7 @@ def create_safe_workdir(base_dir=None):
     if base_dir is None:
         base_dir = os.getcwd()
     timestamp = int(time.time() * 1000)
-    workdir_name = f".gemini_merge_work_{timestamp}_{os.getpid()}"
+    workdir_name = f".multimerge_work_{timestamp}_{os.getpid()}"
     workdir = os.path.join(base_dir, workdir_name)
     os.makedirs(workdir, exist_ok=True)
     return workdir
@@ -397,13 +397,13 @@ def cleanup_intermediate_files(workdir, output_pdf):
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Gemini MultiMerge v2 — Gabungkan CSV + SVG template -> PDF multipage",
+        description="MultiMerge (Custom Mail Merge for Inkscape) — Gabungkan CSV + SVG template -> PDF multipage",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Contoh penggunaan:
-  python gemini-multimerge-v2.py
-  python gemini-multimerge-v2.py --template template.svg --data data.csv --output hasil.pdf
-  python gemini-multimerge-v2.py --timeout 180 --convert-workers 4
+  python multimerge.py
+  python multimerge.py --template template.svg --data data.csv --output hasil.pdf
+  python multimerge.py --timeout 180 --convert-workers 4
         """,
     )
     parser.add_argument("--template", default=DEFAULT_TEMPLATE, help=f"File SVG template (default: {DEFAULT_TEMPLATE})")
@@ -443,7 +443,7 @@ def main():
 
     print()
     print("=" * 60)
-    print("  Gemini MultiMerge v2")
+    print("  MultiMerge (Custom Mail Merge for Inkscape)")
     print("=" * 60)
     print()
 

@@ -1,4 +1,4 @@
 __pycache__/
 *.pyc
 output.pdf
-.gemini_merge_work_*/
+.multimerge_work_*/
